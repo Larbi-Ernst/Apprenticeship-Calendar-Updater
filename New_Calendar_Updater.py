@@ -1,172 +1,242 @@
+import json
+import tkinter as Tkinter
+import asyncio
+import datetime
+import math
+from collections import OrderedDict
+
 import pyexcel
+import googleapiclient
+
 from httplib2 import Http
 from oauth2client import file, client, tools
-import asyncio
 from pyexcel_xlsx import save_data, get_data
 from googleapiclient.discovery import build
-import googleapiclient
-from collections import OrderedDict
-import json
-import datetime
 
+from week_day_calculator import *
+
+def json_converter(json_date) -> str:
+        if isinstance(json_date, datetime.datetime):
+            return json_date.__str__()
+
+class Interface(Tkinter.Frame):
+    
+    def __init__(self, master = None):
+        Tkinter.Frame.__init__(self, master) 
+        #self.create_widgets()
+        self.create_list_box()
+            
+    def create_list_box(self):
+        self.listbox_label = Tkinter.Label(self, text = "select files")
+        self.listbox_label.pack()
+        
+        self.listbox = Tkinter.Listbox(self)
+        self.listbox.pack()
+        self.listbox.insert("end",'YES')
+        
+    def create_widgets(self):
+        self.quit_button = Tkinter.Button(self, text = 'Quit', command = self.quit)
+        
+    
 class Manager(object):
-
+    
     def __init__(self):
         self.format = "calender"
         self.schedule = []
-        self.conversion = {
-            "Jan":"01",
-            "January":"01",
-            "Feb":"02",
-            "March":"03",
-            "April":"04",
-            "May":"05",
-            "June":"06",
-            "July":"07",
-            "August":"08",
-            "Sept":"09",
-            "September":"09",
-            "Oct":"10",
-            "October":"10",
-            "Nov":"11",
-            "November":"11",
-            "Dec":"12",
-            "December":"12"}
-   
-    def deschedule(self) -> "config":
-        
-        for path_data in self.schedule: 
-            yield self.config(path_data)
+        self.pages = []
+        self.calendarID = ""
     
-    def config(self,path_data: str) -> "table_extract":
-
-        self.path = path_data
+    def deschedule(self) -> "config":
+        for scheduled_sheet in self.schedule:
+            print(1)
+            yield self.config(scheduled_sheet)
+    
+    def config(self,sheet_path: str) -> "table_extract":
+        print(2)
+        self.path = sheet_path
   
-        self.data = get_data(self.path)
-        self.json_data = json.loads(json.dumps(self.data,default=self.json_converter))
-        self.names = iter(["Page1","Page2","Page3","Page4","_","_","_","_","_","_"])
-
-        for item in self.json_data:
-
-            name = next(self.names)
-            setattr(self,name,[item if item != [] else None for item in self.json_data[item]])
-
-            if name in ["Page2"]:
-                self.table_extract(eval(f"self.{name}"),False)
-                
-        #cohort_1
+        self.sheet_content = get_data(self.path)
         
-    def json_converter(value,x) -> str:
-        
-        if isinstance(value,datetime.datetime):
-            return value.__str__()
-        
-    def table_extract(self, data_set: list,Condition) -> "calender_update":
+        self.json_data = json.loads(json.dumps(self.sheet_content, default = json_converter))
 
+        #add a way of gathering all of the page names V
+        
+        self.page_selection_list = [property_name for property_name in self.json_data]
+        self.page_selection_iter = iter(self.page_selection_list)
+        self.page_content = {}
+        
+        for property_name in self.json_data:
+
+            page = next(self.page_selection_iter)
+            self.page_content[page] = [property_value if property_value != [] else None for property_value in self.json_data[property_name]]
+
+            print(self.pages)
+            if page in self.pages:
+        
+                self.table_extract(self.page_content[page], False)
+        
+    def table_extract(self, page_data: list,Condition) -> "calender_update":
 
         multiple = False
-        
-        for item in data_set:
-            
-            if item != None:
-           
-                if len(item) != 4:
-                    data_set.remove(item)
-            else:
-                data_set.remove(item)
+        known_categories = ["year","dates","month","weekend","location"]
 
-        Extra_Date_Start = data_set.index(['Year','Month','Dates'],2)
-        College_Dates = data_set[0:Extra_Date_Start]
-        Extra_Dates = data_set[Extra_Date_Start:len(data_set)]
+        for line_content in page_data:
+            if isinstance(line_content,list):
+                for item in line_content:
+                    if str(item).lower() in known_categories:
+                        categories = line_content
+
+        for line_content in page_data:
+
+            if line_content != None:       
         
-        for item in Extra_Dates:
+                if not isinstance(line_content[0],float):
+                        
+                    page_data.remove(line_content)
+              
+            else:
+                page_data.remove(line_content)
+                
+        extra_dates_start = page_data.index(categories,2)
+        college_dates = page_data[0:extra_dates_start]
+        extra_dates = page_data[extra_dates_start:len(page_data)]
+        
+        for item in extra_dates:
+
+            print(item)
             if item[0] != "":
                 date = item[0]
+                
             else:
                 item[0] = date
          
-        Final_Dates = [item for item in College_Dates+Extra_Dates if type(item[0]) == float]
-        self.calendar_update(Final_Dates)
-
-    def month_name_converter(self, name: str) -> str:
-        name = name.split(" ")[0]
-
-        return self.conversion[name]
-    
-    def calendar_update(self, final_data_set: list):
-
-        SCOPES = 'https://www.googleapis.com/auth/calendar'
-        store = file.Storage('storage.json')
-        creds = store.get()
-        if not creds or creds.invalid:
-            flow = client.flow_from_clientsecrets('client_secret.json', SCOPES)
-            creds = tools.run_flow(flow, store)
+        final_dates = [date for date in college_dates+extra_dates if type(date[0]) == float]
+        print(final_dates)
+        self.json_create(final_dates)
         print("YES")
-        API_KEY = "AIzaSyDHN04fCmdUH5Tw3uvkgBiq-AJKM8RIiUY"
-        GCAL = build('calendar', 'v3', developerKey = API_KEY,http=creds.authorize(Http()))
         
-        for event in final_data_set:
+    
+    def json_create(self, final_event_dates: list):
+        
+        for event in final_event_dates:
+            date_suffixes = ["th", "rd", "nd", "st"]
 
-
-            date_suffixes = ["th","rd","nd","st"]
-
-            print(event[2])
-            A = [item if any(i in [str(x) for x in range(0,10)] for i in item) else "" for item in event[2].split("-")]
+            num_strings = [str(num) for num in range(0,10)]
             
-            for item in A:
-                for date_suffix in date_suffixes:
-                    if " " in item.lower():
-                        A[A.index(item)] = item.replace(" ","")
-                        item = item.replace(" ","")
-                        
-                    if date_suffix in item.lower():
-                        A[A.index(item)] = item.replace(date_suffix,"")
-                    
-            print(A)
-                        
+            event_days = [day if any(character in num_strings for character in day) else "" for day in event[2].split("-")]
+            
+            for day in event_days:
                 
-            if A[0] != "":
-                if len(A) == 1:
-                    A*=2
+                for date_suffix in date_suffixes:
                     
-                Month = self.month_name_converter(event[1])
+                    if " " in day:
+                        event_days[event_days.index(day)] = day.replace(" ","")
+                        day = day.replace(" ","")
+                        
+                    if date_suffix in day.lower():
+                        event_days[event_days.index(day)] = day.replace(date_suffix,"")
+                        
+            if event_days[0] != "":
+                
+                if len(event_days) == 1:
+                    event_days*=2
+                    
+                month = month_name_converter(event[1])
 
                 try:
-                    int(A[1])
-                    Other_Month = Month
-                except:
-                    for key,_ in self.conversion.items():
-                        if key in A[1]:
-                            A[1] = A[1].replace(key,"")
-                            Other_Month = self.month_name_converter(key)
-                print(Other_Month)
-                print(A)
+                    int(event_days[1])
+                    other_month = month
                     
+                except ValueError:
+                    for key,_ in conversion.items():
+                        
+                        if key in event_days[1]:
+                            event_days[1] = event_days[1].replace(key, "")
+                            other_month = month_name_converter(key)
                 
-                event_item = {
-                    'header':'Content-Type: application/json',
-                    'summary': event[3],
-                    'start':  {
-                        'date': datetime.date((int(event[0])),int(Month),int(A[0])).__str__()
-                        },
-                    'end':  {
-                        'date': datetime.date((int(event[0])),int(Other_Month),int(A[1])).__str__()
-                        },
-                    'location': "Ada. National College for Digital Skills, Broad Lane, London N15 4AG, UK"
-                }   
-                 
-                GCAL.events().insert(calendarId = "ada.ac.uk_urg8gh52f0rlnrimf0qikkevig@group.calendar.google.com",body= event_item).execute()
+                split_events = self.final_event_handler({"start day":event_days[0],"end day":event_days[1],"start month":month,"end month":other_month,"year":event[0]})
+                
+                for item in split_events:
+                    
+                    
+                    month1 =  item[0]["month"]
+                    day1 = item[0]["day"]
+                    day2 = item[1]["day"]
+                    month2 = item[1]["month"]
+                
+                    event_item = {
+                        #yyyy/mm/dd
+                        'header':'Content-Type: application/json',
+                        'summary': event[3],
+                        'start':  {
+                            'date': datetime.date((int(event[0])), month1, day1).__str__()
+                            },
+                        'end':  {
+                            'date': datetime.date((int(event[0])), month2, day2).__str__()
+                            },
+                        'location': "Ada. National College for Digital Skills, Broad Lane, London N15 4AG, UK"
+                    }
+
+                    print(event_item)
+              
+        #self.calendar_update(event_item)
+        
+    def final_event_handler(self, event: dict) -> dict:
+        
+        week_days = week_day_from_span(event)
+        event_info = []
+        for item in week_days:
+            event_info.append((item[0],item[-1]))
+
+        return event_info
+
+    
+
+        
+            
         
         
-        print("COMPLETE")        
+    def calendar_update(self, json_item: dict):
+        SCOPES = 'https://www.googleapis.com/auth/calendar'
+        store = file.Storage('storage.json')
+        credentials = store.get()
+
+       
+        if not credentials or credentials.invalid:
+            
+            flow = client.flow_from_clientsecrets('client_secret.json', SCOPES)
+            creds = tools.run_flow(flow, store)
         
+        else:
+            print("ERROR")
+            
+        API_KEY = "AIzaSyAWM_ehPmeATqpSQ4MT4uWXaYpQ5z9zg7A"
+        google_calendar = build('calendar', 'v3', developerKey = API_KEY, http=creds.authorize(Http()))
+
+        google_calendar.events().insert(calendarId = self.calendarID, body = json_item).execute()
+
+      
     def update(self):
+        
         while len(self.schedule) > 0:
+            print(0)
             self.current_event = self.deschedule()
             next(self.current_event)
             self.schedule.remove(self.schedule[0])
-      
+            
             
 A = Manager()
-A.schedule.append("_2017-2021 Apprentice Timetable - all cohorts NEW.xlsx")
+
+with open("C:/Users/Student/Documents/Apprenticeship Script/Calendar Automation Start/InputData.txt", "r") as INPUT_CONTENT:
+    INPUT_CONTENT = list(INPUT_CONTENT)
+    File_name = INPUT_CONTENT[0][6:].replace("\n", "")
+    A.pages = INPUT_CONTENT[1][7:].replace("\n", "").split(",")
+ 
+    A.CalendarID = INPUT_CONTENT[2][11:].replace("\n", "")
+
+A.schedule.append(File_name)
 A.update()
+
+#App = Interface()
+#App.master.title('Calendar Manager')
+#App.mainloop()

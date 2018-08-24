@@ -1,8 +1,6 @@
-File: _2017-2021 Apprentice Timetable - all cohorts NEW
-Pages: Page2
-CalendarID: ada.ac.uk_urg8gh52f0rlnrimf0qikkevig@group.calendar.google.com
-
-
+File: _2017-2021 Apprentice Timetable - all cohorts NEW.xlsx
+Pages: Key Dates SD Cohort 1
+CalendarID: ada.ac.uk_r6cq1mpo3tbpb7t31nkirgo37k@group.calendar.google.com
 
 COMMENTS:
 - always leave a space
